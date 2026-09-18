@@ -1,0 +1,278 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111827">
+<title>Home + Auto Dashboard</title>
+
+<style>
+:root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#111827;background:#f3f4f6}
+*{box-sizing:border-box}
+body{margin:0}
+.app{max-width:900px;margin:auto;padding:18px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.muted{color:#6b7280}
+.tabs{display:flex;gap:8px;overflow:auto;margin:18px 0}
+.tab,button{border:0;border-radius:12px;padding:11px 14px;font-weight:700}
+.tab{background:#e5e7eb}
+.tab.active{background:#111827;color:white}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px}
+.card{background:white;border-radius:18px;padding:16px;box-shadow:0 1px 4px #0001}
+.stat{font-size:30px;font-weight:800}
+.item{border-left:5px solid #f59e0b;margin:10px 0;padding:10px 12px;background:#f9fafb;border-radius:10px}
+.high{border-left-color:#ef4444}
+.low{border-left-color:#10b981}
+.item h3{margin:0 0 5px;font-size:16px}
+.item p{margin:4px 0;font-size:14px}
+.actions{display:flex;gap:8px;margin-top:10px}
+.actions button{padding:7px 10px}
+.primary{background:#111827;color:white}
+.ghost{background:#e5e7eb}
+.fab{position:fixed;right:22px;bottom:22px;background:#111827;color:white;font-size:18px;box-shadow:0 4px 16px #0004}
+dialog{border:0;border-radius:18px;padding:20px;width:min(92vw,480px)}
+input,select,textarea{width:100%;padding:10px;margin:5px 0 12px;border:1px solid #d1d5db;border-radius:10px;font:inherit}
+label{font-size:13px;font-weight:700}
+.money{font-weight:800;color:#047857}
+small{color:#6b7280}
+</style>
+</head>
+
+<body>
+
+<main class="app">
+
+<div class="top">
+<div>
+<h1 style="margin:0">Maintenance</h1>
+<div class="muted">Home + Auto · proof of concept</div>
+</div>
+
+<div>
+<small>DIY savings</small>
+<div class="money" id="savings">$0</div>
+</div>
+</div>
+
+<nav class="tabs">
+<button class="tab active" data-tab="home">Home</button>
+<button class="tab" data-tab="fusion">Fusion</button>
+<button class="tab" data-tab="tiguan">Tiguan</button>
+</nav>
+
+<section id="summary" class="grid"></section>
+
+<section>
+<h2 id="heading">Home</h2>
+<div id="items"></div>
+</section>
+
+</main>
+
+<button class="fab" id="add">＋ Add</button>
+
+<dialog id="dlg">
+<form method="dialog" id="form">
+
+<h2>Add maintenance item</h2>
+
+<label>Dashboard</label>
+<select id="vehicle">
+<option value="home">Home</option>
+<option value="fusion">2019 Ford Fusion Hybrid</option>
+<option value="tiguan">Volkswagen Tiguan</option>
+</select>
+
+<label>Item</label>
+<input id="title" required placeholder="e.g. Replace garage door sweep">
+
+<label>Priority</label>
+<select id="priority">
+<option value="high">High</option>
+<option value="medium" selected>Medium</option>
+<option value="low">Low</option>
+</select>
+
+<label>Next action</label>
+<input id="next" placeholder="What is the very next step?">
+
+<label>Notes</label>
+<textarea id="notes"></textarea>
+
+<label>DIY cost ($)</label>
+<input id="cost" inputmode="decimal" type="number" min="0" step=".01">
+
+<label>Professional estimate ($)</label>
+<input id="pro" inputmode="decimal" type="number" min="0" step=".01">
+
+<div class="actions">
+<button value="cancel" class="ghost">Cancel</button>
+<button value="default" class="primary" id="save">Save</button>
+</div>
+
+</form>
+</dialog>
+
+<script>
+const seed=[
+{id:1,group:'home',title:'Garage side-door threshold',priority:'high',next:'Inspect sweep/weatherstrip and measure gap',notes:'Daylight visible around door',done:false,cost:0,pro:0},
+{id:2,group:'home',title:'Wood column rot',priority:'high',next:'Inspect damaged wrap/base and plan PVC repair',notes:'Exterior column wraps have rot',done:false,cost:0,pro:0},
+{id:3,group:'home',title:'Kitchen leak detectors',priority:'medium',next:'Install first detector under kitchen sink',notes:'Then consider bathrooms, dishwasher, washer, water heater and refrigerator line',done:false,cost:0,pro:0},
+{id:4,group:'home',title:'Backyard mulch',priority:'low',next:'Refresh mulch while keeping it off trunks/stems',notes:'',done:false,cost:0,pro:0},
+
+{id:5,group:'fusion',title:'Front tire',priority:'high',next:'Inspect/replace worn front tire',notes:'2019 Ford Fusion Hybrid · ~124,000 miles',done:false,cost:0,pro:0},
+{id:6,group:'fusion',title:'Engine air filter',priority:'low',next:'No action — log next inspection',notes:'Recently replaced',done:true,cost:0,pro:0},
+{id:7,group:'fusion',title:'Coolant service',priority:'medium',next:'Confirm full service history and plan coolant change if due',notes:'Both reservoirs were recently found low and topped off',done:false,cost:0,pro:0},
+
+{id:8,group:'tiguan',title:'Vehicle profile',priority:'medium',next:'Add model year, mileage and known service history',notes:"Wife's Volkswagen Tiguan",done:false,cost:0,pro:0}
+];
+
+let data=JSON.parse(localStorage.getItem('maint-v01')||'null')||seed;
+let current='home';
+
+const names={
+home:'Home',
+fusion:'2019 Ford Fusion Hybrid',
+tiguan:'Volkswagen Tiguan'
+};
+
+function persist(){
+localStorage.setItem('maint-v01',JSON.stringify(data))
+}
+
+function render(){
+
+document.querySelectorAll('.tab').forEach(x=>
+x.classList.toggle('active',x.dataset.tab===current)
+);
+
+document.getElementById('heading').textContent=names[current];
+
+let arr=data.filter(x=>x.group===current);
+let open=arr.filter(x=>!x.done);
+let high=open.filter(x=>x.priority==='high').length;
+
+document.getElementById('summary').innerHTML=
+`<div class="card">
+<small>Needs attention</small>
+<div class="stat">${high}</div>
+</div>
+
+<div class="card">
+<small>Open items</small>
+<div class="stat">${open.length}</div>
+</div>
+
+<div class="card">
+<small>Completed</small>
+<div class="stat">${arr.filter(x=>x.done).length}</div>
+</div>`;
+
+document.getElementById('items').innerHTML=
+arr.sort((a,b)=>a.done-b.done||
+({high:0,medium:1,low:2}[a.priority]-
+({high:0,medium:1,low:2}[b.priority])))
+.map(x=>
+
+`<div class="item ${x.priority==='high'?'high':x.priority==='low'?'low':''}">
+
+<h3>${x.done?'✓ ':''}${esc(x.title)}</h3>
+
+<p>
+<b>${x.priority.toUpperCase()}</b>
+${x.next?' · '+esc(x.next):''}
+</p>
+
+${x.notes?`<p class="muted">${esc(x.notes)}</p>`:''}
+
+<div class="actions">
+<button class="ghost" onclick="toggle(${x.id})">
+${x.done?'Reopen':'Complete'}
+</button>
+
+<button class="ghost" onclick="del(${x.id})">
+Delete
+</button>
+</div>
+
+</div>`).join('') ||
+`<div class="card muted">Nothing here yet. Tap + Add.</div>`;
+
+let save=data.reduce(
+(s,x)=>s+(x.done?Math.max(0,(+x.pro||0)-(+x.cost||0)):0),0
+);
+
+document.getElementById('savings').textContent=
+save.toLocaleString('en-US',{
+style:'currency',
+currency:'USD',
+maximumFractionDigits:0
+});
+}
+
+function esc(s){
+return String(s).replace(/[&<>"']/g,m=>({
+'&':'&amp;',
+'<':'&lt;',
+'>':'&gt;',
+'"':'&quot;',
+"'":'&#39;'
+}[m]))
+}
+
+window.toggle=id=>{
+let x=data.find(y=>y.id===id);
+x.done=!x.done;
+persist();
+render();
+};
+
+window.del=id=>{
+if(confirm('Delete this item?')){
+data=data.filter(x=>x.id!==id);
+persist();
+render();
+}
+};
+
+document.querySelectorAll('.tab').forEach(x=>
+x.onclick=()=>{
+current=x.dataset.tab;
+render();
+}
+);
+
+const dlg=document.getElementById('dlg');
+
+document.getElementById('add').onclick=()=>{
+document.getElementById('vehicle').value=current;
+dlg.showModal();
+};
+
+document.getElementById('save').onclick=e=>{
+
+if(!document.getElementById('title').value.trim())return;
+
+data.push({
+id:Date.now(),
+group:document.getElementById('vehicle').value,
+title:document.getElementById('title').value.trim(),
+priority:document.getElementById('priority').value,
+next:document.getElementById('next').value.trim(),
+notes:document.getElementById('notes').value.trim(),
+cost:+document.getElementById('cost').value||0,
+pro:+document.getElementById('pro').value||0,
+done:false
+});
+
+persist();
+document.getElementById('form').reset();
+
+setTimeout(render);
+};
+
+render();
+</script>
+
+</body>
+</html>
